@@ -23,8 +23,11 @@ KEY = "img_live_test_secret_1234"
 class Handler(BaseHTTPRequestHandler):
     post_count = 0
     status_count = 0
+    result_count = 0
     balance = 39
-    transient_once = True
+    status_errors_left = 3
+    result_errors_left = 3
+    result_not_ready_left = 2
 
     def log_message(self, *_args):
         return
@@ -75,13 +78,20 @@ class Handler(BaseHTTPRequestHandler):
                 "checked_at": "2026-09-10T00:00:00Z",
             })
         if self.path == "/api/journal-figure-jobs/jfig_test_001":
-            if Handler.transient_once:
-                Handler.transient_once = False
+            if Handler.status_errors_left:
+                Handler.status_errors_left -= 1
                 return self.send_json({"error": "temporary"}, 503)
             Handler.status_count += 1
-            state = "processing" if Handler.status_count == 1 else "completed"
+            state = "processing" if Handler.status_count <= 3 else "completed"
             return self.send_json({"job_id": "jfig_test_001", "status": state})
         if self.path == "/api/journal-figure-jobs/jfig_test_001/result":
+            Handler.result_count += 1
+            if Handler.result_not_ready_left:
+                Handler.result_not_ready_left -= 1
+                return self.send_json({"error": "not ready"}, 409)
+            if Handler.result_errors_left:
+                Handler.result_errors_left -= 1
+                return self.send_json({"error": "temporary"}, 503)
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
             self.send_header("Content-Length", str(len(PNG)))
@@ -98,12 +108,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def call(script: Path, env: dict[str, str], *args: str, expect: int = 0, stdin: str | None = None):
     result = subprocess.run(
-        [sys.executable, "-X", "utf8", str(script), *args],
+        [sys.executable, "-B", "-X", "utf8", str(script), *args],
         input=stdin,
         text=True,
+        encoding="utf-8",
         capture_output=True,
         env=env,
         check=False,
+        timeout=15,
     )
     assert result.returncode == expect, (result.stdout, result.stderr)
     combined = result.stdout + result.stderr
@@ -138,19 +150,45 @@ def main() -> None:
             reference = temp / "reference.png"
             reference.write_bytes(PNG)
             result = call(
-                script, env, "run", "--wait", "--interval", "0.1", "--timeout", "5",
+                script, env, "run", "--interval", "0.1", "--timeout", "5",
                 "--text", "SLC7A11 disulfidptosis", "--reference", str(reference),
             )
             assert result["status"] == "completed"
             assert result["downloaded"] is True
             assert Path(result["result_path"]).read_bytes().startswith(PNG[:8])
             assert Handler.post_count == 1
+            assert Handler.status_count == 6, "processing and completed/result-409 must keep polling"
+            assert Handler.result_count == 6, "409 and exhausted 503 retries must not finish early"
 
             repeated = call(
                 script, env, "run", "--wait", "--interval", "0.1", "--timeout", "5",
                 "--text", "SLC7A11 disulfidptosis", "--reference", str(reference),
             )
             assert repeated["reused"] is True
+            assert Handler.post_count == 1
+
+            # Lost cached output must recover the same job instead of another paid POST.
+            Path(result["result_path"]).unlink()
+            recovered = call(
+                script, env, "run", "--interval", "0.1", "--timeout", "5",
+                "--text", "SLC7A11 disulfidptosis", "--reference", str(reference),
+            )
+            assert recovered["reused"] is True
+            assert Path(recovered["result_path"]).read_bytes() == PNG
+            assert Handler.post_count == 1
+
+            # Resume without --wait also waits for repeated processing / result-409 states.
+            Handler.status_count = 0
+            Handler.result_count = 0
+            Handler.result_not_ready_left = 2
+            resume_env = {**env, "XIAOMIAO_CLIENT_DATA_DIR": str(temp / "resume-data")}
+            resumed = call(
+                script, resume_env, "resume", "jfig_test_001", "--interval", "0.1", "--timeout", "5",
+            )
+            assert resumed["downloaded"] is True
+            assert Path(resumed["result_path"]).read_bytes() == PNG
+            assert Handler.status_count == 6
+            assert Handler.result_count == 3
             assert Handler.post_count == 1
 
             Handler.balance = 2

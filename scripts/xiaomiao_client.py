@@ -45,6 +45,10 @@ class ClientError(RuntimeError):
     pass
 
 
+class TemporaryServiceError(ClientError):
+    pass
+
+
 class AuthenticationError(ClientError):
     pass
 
@@ -126,7 +130,7 @@ class XiaomiaoClient:
                 if attempt < len(delays):
                     time.sleep(delays[attempt])
                     continue
-                raise ClientError("暂时无法连接小描服务。") from exc
+                raise TemporaryServiceError("暂时无法连接小描服务。") from exc
             if response.status_code in {500, 503} and attempt < len(delays):
                 time.sleep(delays[attempt])
                 continue
@@ -146,6 +150,8 @@ class XiaomiaoClient:
                 raise InputError(f"提交内容不符合接口要求{suffix}")
             if response.status_code == 403:
                 raise ClientError(f"当前 API Key 没有期刊图权限{suffix}")
+            if response.status_code in {500, 503}:
+                raise TemporaryServiceError(f"小描服务暂时不可用（HTTP {response.status_code}）{suffix}")
             raise ClientError(f"小描服务返回 HTTP {response.status_code}{suffix}")
         raise ClientError("小描服务暂时不可用。") from last_error
 
@@ -354,11 +360,22 @@ class XiaomiaoClient:
         follow = self._request("GET", download, key=key)
         return follow.content, follow, metadata
 
+    def downloaded_result_available(self, job: dict[str, Any] | None) -> bool:
+        """A cached completion is usable only while its complete PNG still exists."""
+        if not job or not job.get("downloaded") or not job.get("result_path"):
+            return False
+        try:
+            self._verify_png(Path(job["result_path"]).read_bytes())
+        except (OSError, ClientError):
+            return False
+        return True
+
     def download(self, job_id: str) -> dict[str, Any]:
         current = self.store.get(job_id)
-        if current and current["downloaded"] and current.get("result_path"):
-            if Path(current["result_path"]).is_file():
-                return current
+        if self.downloaded_result_available(current):
+            return current
+        if current and current.get("downloaded"):
+            current = self.store.update(job_id, downloaded=False, result_path=None)
         try:
             raw, response, metadata = self._result_bytes(job_id, current.get("result_url") if current else None)
         except NotReady:
@@ -408,22 +425,38 @@ class XiaomiaoClient:
         started = time.monotonic()
         while True:
             current = self.store.get(job_id)
-            if current and current["downloaded"]:
+            if self.downloaded_result_available(current):
                 return current
-            state = str((current or {}).get("status", "")).lower()
-            if state in SUCCESS:
-                return self.download(job_id)
-            if state in FAILURE:
-                raise ClientError(f"期刊图任务已结束：{state}")
-            job = self.status(job_id)
-            state = str(job["status"]).lower()
-            if state in SUCCESS:
-                return self.download(job_id)
-            if state in FAILURE:
-                raise ClientError(f"期刊图任务已结束：{state}")
-            if timeout is not None and time.monotonic() - started >= timeout:
-                raise ClientError("等待超时；任务已保留并可继续恢复。")
-            time.sleep(max(float(interval), 0.1))
+            if current and current.get("downloaded"):
+                current = self.store.update(job_id, downloaded=False, result_path=None)
+            try:
+                state = str((current or {}).get("status", "")).lower()
+                if state not in SUCCESS | FAILURE:
+                    current = self.status(job_id)
+                    state = str(current["status"]).lower()
+                if state in FAILURE:
+                    raise ClientError(f"期刊图任务已结束：{state}")
+                if state in SUCCESS:
+                    result = self.download(job_id)
+                    if self.downloaded_result_available(result):
+                        return result
+            except (NotReady, TemporaryServiceError) as exc:
+                # Retry only this existing job, including a result endpoint still returning 409.
+                current = self.store.get(job_id)
+                if current:
+                    self.store.update(
+                        job_id,
+                        retry_count=int(current.get("retry_count", 0)) + 1,
+                        last_error=redact_text(str(exc), [])[:500],
+                        last_checked_at=int(time.time()),
+                    )
+            delay = max(float(interval), 0.1)
+            if timeout is not None:
+                remaining = timeout - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise ClientError("等待超时；任务已保留并可继续恢复。")
+                delay = min(delay, remaining)
+            time.sleep(delay)
 
     def cancel(self, job_id: str) -> dict[str, Any]:
         key, _ = self.authenticate()
@@ -545,7 +578,9 @@ def build_parser() -> argparse.ArgumentParser:
         item.add_argument("--text-file")
         item.add_argument("--reference", action="append", default=[])
         if name == "run":
-            item.add_argument("--wait", action="store_true")
+            mode = item.add_mutually_exclusive_group()
+            mode.add_argument("--wait", action="store_true", help="等待并下载最终 PNG（默认）")
+            mode.add_argument("--background", action="store_true", help="仅显式请求时转入后台等待")
             item.add_argument("--interval", type=float, default=POLL_INTERVAL)
             item.add_argument("--timeout", type=float)
     for name in ("status", "fetch", "cancel"):
@@ -553,7 +588,9 @@ def build_parser() -> argparse.ArgumentParser:
         item.add_argument("job_id")
     resume = sub.add_parser("resume")
     resume.add_argument("job_id")
-    resume.add_argument("--wait", action="store_true")
+    mode = resume.add_mutually_exclusive_group()
+    mode.add_argument("--wait", action="store_true", help="等待并下载最终 PNG（默认）")
+    mode.add_argument("--background", action="store_true", help="仅显式请求时转入后台等待")
     resume.add_argument("--interval", type=float, default=POLL_INTERVAL)
     resume.add_argument("--timeout", type=float)
     sub.add_parser("start-worker")
@@ -574,11 +611,14 @@ def main() -> int:
             emit(client.balance())
         elif args.command in {"submit", "run"}:
             job = client.submit(text_argument(args), args.reference)
-            if args.command == "run" and not job.get("downloaded"):
-                if args.wait:
-                    job = client.process(str(job["job_id"]), interval=args.interval, timeout=args.timeout)
+            if args.command == "run":
+                if args.background:
+                    if not client.downloaded_result_available(job):
+                        start_worker_detached()
                 else:
-                    start_worker_detached()
+                    reused = job.get("reused", False)
+                    job = client.process(str(job["job_id"]), interval=args.interval, timeout=args.timeout)
+                    job["reused"] = reused
             emit(job)
         elif args.command == "status":
             emit(client.status(args.job_id))
@@ -587,7 +627,7 @@ def main() -> int:
         elif args.command == "cancel":
             emit(client.cancel(args.job_id))
         elif args.command == "resume":
-            if args.wait:
+            if not args.background:
                 emit(client.process(args.job_id, interval=args.interval, timeout=args.timeout))
             else:
                 start_worker_detached()

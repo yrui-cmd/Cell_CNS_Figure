@@ -148,7 +148,7 @@ class JobStore:
             state = str(item["status"]).lower()
             if item["downloaded"] and item.get("result_path") and Path(item["result_path"]).is_file():
                 return item
-            if state in ACTIVE_STATES and not item["downloaded"]:
+            if state in ACTIVE_STATES:
                 return item
         return None
 
