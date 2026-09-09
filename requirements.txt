@@ -1,0 +1,2 @@
+requests>=2.31,<3
+Pillow>=10,<13

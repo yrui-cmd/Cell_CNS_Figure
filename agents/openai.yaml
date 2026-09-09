@@ -1,0 +1,6 @@
+interface:
+  display_name: "cell_figure"
+  short_description: "自动提交小描期刊图任务、后台轮询并领取高清 PNG"
+  default_prompt: "使用 $cell-figure 把我的科研内容和可选参考文件提交到小描，自动领取最终 PNG 并显示实时余额。"
+policy:
+  allow_implicit_invocation: true
