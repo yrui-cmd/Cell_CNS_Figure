@@ -30,6 +30,8 @@
 
 ## 终态
 
+费用提示读取本次响应的 `reserved_credits`（兼容 `credits_reserved`）、`credits_left`、`billing` 和 `charged_at`。预留不是最终扣费；金额缺失保持未知，零值不得用默认金额替代。客户端历史最低余额检查门槛不是接口报价。已观察到单次预留 20 额度，但不得据此承诺永久价格。
+
 - 成功：`completed`、`complete`、`succeeded`、`success`
 - 失败：`failed`、`error`、`cancelled`、`canceled`、`expired`
 

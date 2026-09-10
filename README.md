@@ -46,8 +46,11 @@ python -m pip install -r requirements.txt
 # 查询实时余额
 python -X utf8 scripts/xiaomiao_client.py balance
 
-# 提交并等待图片返回（默认等待，--wait 可省略）
-python -X utf8 scripts/xiaomiao_client.py run --wait --text-file research.txt --reference reference.png
+# 提交，立即核对服务端实际预留额度
+python -X utf8 scripts/xiaomiao_client.py submit --text-file research.txt --reference reference.png
+
+# 费用核对并获授权后，继续等待同一任务直到图片返回
+python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait
 
 # 查看已提交任务
 python -X utf8 scripts/xiaomiao_client.py status JOB_ID
@@ -61,7 +64,7 @@ python -X utf8 scripts/xiaomiao_client.py install-autostart
 
 研究内容限制为 1–12000 字符；参考文件最多 6 个，单个不超过 10 MB，合计不超过 30 MB。默认每 600 秒查询一次，在查询发现完成时立即下载。电脑需要保持运行和联网。
 
-`run` 和 `resume` 默认等待可用 PNG，不设置总等待时限。服务器返回完成但图片暂未就绪时，继续等待原任务。独立命令行用户明确希望后台运行时，可加 `--background`；Codex 正常生成流程会保持当前任务，直到交付图片。
+`run` 和 `resume` 默认等待可用 PNG，不设置总等待时限。Skill 使用“提交 → 核对预留费用 → 恢复等待”，避免等到图返回才发现费用变化；费用核对后持续执行到交付图片。服务器返回完成但图片暂未就绪时，继续等待原任务。独立命令行用户明确希望后台运行时，可加 `--background`。
 
 Windows 默认结果位置为 `%LOCALAPPDATA%\cell_figure\results\<job_id>\final.png`；macOS/Linux 为 `${XDG_DATA_HOME:-~/.local/share}/cell-figure/results/<job_id>/final.png`。
 
@@ -71,7 +74,11 @@ Windows 默认结果位置为 `%LOCALAPPDATA%\cell_figure\results\<job_id>\final
 
 你也可以在当前助手对话中提供自己的 Key，让助手通过 `configure-key` 的标准输入完成配置，无需把 Key 写入脚本或命令参数；聊天本身仍由所用平台保存和管理。
 
-Windows 安全存储使用当前用户的 DPAPI 加密。macOS/Linux 使用权限为 `0600` 的本地私有文件，不是加密钥匙串。客户端源码开源；小描远程服务需要独立 API Key 和额度。客户端以每任务 3 额度进行提交前检查，实际预留与扣费以服务端为准。输入文字与参考文件会发送到 `https://xiaomiao-ai.com`。
+Windows 安全存储使用当前用户的 DPAPI 加密。macOS/Linux 使用权限为 `0600` 的本地私有文件，不是加密钥匙串。客户端源码开源；小描远程服务需要独立 API Key 和额度。输入文字与参考文件会发送到 `https://xiaomiao-ai.com`。
+
+**旧版“本次需要 3 额度”的提示不准确。** 3 只是客户端历史最低余额检查门槛，不能视为报价。2026-09-10 实际观察到单次任务预留 **20 额度**；该数字是费用参考，不是固定价格或最终扣费承诺。
+
+每次先查实时余额，提交后立即显示服务端实际预留和返回的可用余额。缺失金额不补造，预留与最终扣费分别说明。若实际预留与已告知金额不一致、金额未知或超出授权范围，先暂停本地自动领取并询问用户，确认后继续原任务。暂停本地程序不等于取消远端生成，也不能保证服务端不会继续结算；不会擅自取消或重新提交。
 
 ## 验证与当前边界
 
@@ -79,6 +86,7 @@ Windows 安全存储使用当前用户的 DPAPI 加密。macOS/Linux 使用权�
 python -B -X utf8 scripts/test_client.py
 python -B -X utf8 scripts/test_worker.py -v
 python -B -X utf8 scripts/test_wait_completion.py -v
+python -B -X utf8 scripts/test_billing_display.py -v
 ```
 
 测试使用临时数据目录、临时桌面和本地模拟服务，覆盖余额、PNG 领取、基本去重、额度不足、参考数量限制、桌面凭据发现和凭据输出检查。等待测试覆盖默认持续等待、多轮处理中、结果未就绪、短暂服务错误、恢复时不重复提交以及真实失败退出。后台测试覆盖重复启动时进程仍存活，以及成功状态别名在下载失败后的恢复，不产生线上费用。模拟测试通过不等同于所有故障场景已验证。

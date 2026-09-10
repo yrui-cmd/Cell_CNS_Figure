@@ -33,7 +33,7 @@ ENDPOINTS = {
     "result": "/api/journal-figure-jobs/{job_id}/result",
     "cancel": "/api/journal-figure-jobs/{job_id}",
 }
-EXPECTED_COST = 3
+MINIMUM_BALANCE_CHECK = 3  # Legacy local floor, not a service price or reservation quote.
 POLL_INTERVAL = int(os.environ.get("XIAOMIAO_POLL_INTERVAL", "600"))
 RETRY_DELAYS = tuple(float(x) for x in os.environ.get("XIAOMIAO_RETRY_DELAYS", "5,15,30,60,120").split(","))
 SUCCESS = {"completed", "complete", "succeeded", "success"}
@@ -253,8 +253,8 @@ class XiaomiaoClient:
             available = float(balance["available_credits"])
         except (TypeError, ValueError) as exc:
             raise ClientError("余额接口返回的可用额度无效。") from exc
-        if available < EXPECTED_COST:
-            raise QuotaError(f"当前额度不足；当前：{balance['available_credits']}，期刊图需要：{EXPECTED_COST}。")
+        if available < MINIMUM_BALANCE_CHECK:
+            raise QuotaError(f"当前额度不足；当前：{balance['available_credits']}，低于客户端最低余额检查门槛 {MINIMUM_BALANCE_CHECK}（不是服务报价）。")
         if not balance["journal_available"]:
             raise ClientError("当前 API Key 未开放期刊图生成权限。")
 
@@ -288,7 +288,9 @@ class XiaomiaoClient:
             "credits_used": credits["credits_used"],
         }
         self.store.put(job)
-        job["reserved_credits"] = self._first(data, "reserved_credits", "credits_reserved") or EXPECTED_COST
+        job["reserved_credits"] = self._first(data, "reserved_credits", "credits_reserved")
+        job["billing"] = data.get("billing")
+        job["charged_at"] = data.get("charged_at")
         job["reused"] = False
         return job
 
@@ -310,7 +312,7 @@ class XiaomiaoClient:
             }
             self.store.put({**current, "status": state})
         credits = self._balance_fields(data, response.headers)
-        return self.store.update(
+        updated = self.store.update(
             job_id,
             status=state,
             last_checked_at=int(time.time()),
@@ -319,6 +321,10 @@ class XiaomiaoClient:
             credits_used=credits["credits_used"] if credits["credits_used"] is not None else current.get("credits_used"),
             last_error=None,
         )
+        updated["reserved_credits"] = self._first(data, "reserved_credits", "credits_reserved")
+        updated["billing"] = data.get("billing")
+        updated["charged_at"] = data.get("charged_at")
+        return updated
 
     @staticmethod
     def _verify_png(raw: bytes) -> tuple[int, int]:
@@ -555,6 +561,7 @@ def install_autostart() -> None:
 def emit(value: dict[str, Any]) -> None:
     allowed = {
         "ok", "job_id", "status", "reused", "reserved_credits", "credits_left",
+        "billing", "charged_at",
         "available_credits", "credits_used", "journal_available", "result_path", "downloaded",
         "worker_started", "autostart_installed", "configured",
     }
