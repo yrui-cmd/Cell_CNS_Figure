@@ -1,20 +1,20 @@
 ---
 name: cell-figure
-description: Submit research text and optional JPG, PNG, or PDF references to the Xiaomiao journal-figure API, show the live balance, and keep waiting until the verified PNG is retrieved and delivered to the user. Persist and resume the same job across interruptions. Use for Xiaomiao journal figures or Xiaomiao API balance; do not use for path recognition or local figure generation.
+description: Submit research text and optional JPG, PNG, or PDF references to the Xiaomiao journal-figure API, show the live balance, and schedule checks every 20 minutes until the verified PNG is retrieved and delivered. Persist and resume the same job across interruptions. Use for Xiaomiao journal figures or Xiaomiao API balance; do not use for path recognition or local figure generation.
 ---
 
 # cell_figure
 
-这是小描期刊图 API 客户端。它提交用户原始科研内容、持久化任务、持续等待并领取 PNG；不在本地生成图片，也不修改路径识别服务。
+这是小描期刊图 API 客户端。它提交用户原始科研内容、保存任务、每 20 分钟唤醒检查并领取 PNG；不在本地生成图片，也不修改路径识别服务。
 
-## 完成条件：收到并交付图片才结束
+## 完成条件与每 20 分钟唤醒
 
-**生成任务必须持续执行到返回图片已下载、验证通过，并实际展示或提供可打开的文件给用户，才可正常结束回复。** “已提交”“已排队”“后台正在处理”、任务 ID 或服务器的 `completed` 状态都不是交付完成。
+**图片下载、验证并交付才算生成任务完成；成功设置定时检查后，当前回复应结束，等待下一次唤醒。** “已提交”或服务器的 `completed` 状态不等于图片已交付。不要让当前对话一直运行。
 
-- 默认在当前任务中保持等待，不把工作留给后台就结束，不让用户再发“继续”或自行回来查询。
-- 运行下方等待命令后，工具若返回仍在运行的会话，应持续使用相应等待/输出工具跟进该会话。每次工具等待不超过 60 秒；正常生成不设置总等待超时。等待工具的一次超时、让出执行权或暂时无新输出都不代表生成已结束。
-- `received`、`queued`、`awaiting_result`、`processing` 和结果暂未就绪继续等待同一个任务。轮询或下载短暂失败时恢复原 job_id，禁止为等待或重试重复提交和扣费。
-- 只有用户主动停止、服务明确返回失败/取消/过期，或发生需要用户处理的鉴权、权限、费用差异确认等真实阻塞时才能暂停或提前结束；说明实际原因并保留任务，不把失败说成完成。
+- 默认使用 Codex 当前对话的定时唤醒，每 20 分钟检查原任务一次；必须实际创建或复用自动任务成功后，才能告诉用户已安排唤醒。具体步骤见 [定时检查](references/scheduled-checks.md)。
+- 不用长时间 sleep、持续工具等待、`resume --wait` 或常驻 worker 代替定时唤醒。每轮无结果就结束，等待下一次计划运行；无实质变化时保持安静，不要求用户发“继续”。
+- `received`、`queued`、`awaiting_result`、`processing`、结果暂未就绪或短暂网络错误均留待下一轮检查同一 job_id，禁止重复提交和扣费。
+- 成功交付、用户要求停止或服务明确失败/取消/过期后，暂停对应自动任务。鉴权、权限或费用问题需要用户处理时说明原因并暂停；定时检查不构成额外费用授权。
 
 本规则适用于生成与恢复生成；仅查询余额时直接返回余额。
 
@@ -32,13 +32,14 @@ python -X utf8 scripts/xiaomiao_client.py submit --text-file <UTF-8文本文件>
 python -X utf8 scripts/xiaomiao_client.py balance
 ```
 
-显示并核对提交结果的预留额度后，立刻接着等待同一个任务并取回结果；中断后也用原 job_id 恢复：
+显示并核对提交结果的预留额度后，安排每 20 分钟唤醒。每次唤醒查询同一任务；完成且费用已获授权时领取：
 
 ```text
-python -X utf8 scripts/xiaomiao_client.py resume <原job_id> --wait
+python -X utf8 scripts/xiaomiao_client.py status <原job_id>
+python -X utf8 scripts/xiaomiao_client.py fetch <原job_id>
 ```
 
-`submit` 是费用核对的中间步骤，不能在此结束正常生成任务；费用已获授权后必须继续 `resume --wait` 直到交付图片。若复用任务未带预留字段，先用 `status <原job_id>` 查询，不补造金额。`run` 和 `resume` 仍默认等待图片，但 Skill 先提交再恢复，以便及时发现预留费用变化。`--background` 和 `start-worker` 仅用于用户明确要求单独后台运行。代理负责管理任务 ID，不要求普通用户自行查询。
+`submit` 后完成费用核对并实际设置定时任务，再结束当前回复。若复用任务未带预留字段，先用 `status` 查询，不补造金额。独立 CLI 的 `run`、`resume --wait` 和 worker 仍可供用户明确选择持续等待，但不是 Skill 默认流程，也不能自行唤醒 Codex 对话。代理负责管理任务 ID 和自动任务 ID，不要求普通用户自行查询。
 
 ## 固定流程
 
@@ -48,7 +49,7 @@ python -X utf8 scripts/xiaomiao_client.py resume <原job_id> --wait
 4. 提交前实时请求 `/api/balance`，展示可用额度并按下方规则说明费用。客户端的 3 额度只是历史最低余额检查门槛，不是服务报价，禁止说“本次只需 3 额度”。余额缺失、鉴权失败、权限被禁用或服务不可确认时停止，不猜测；不得超出用户明确的额度上限。
 5. 本地预检：brief 为 1–12000 字符；最多 6 个参考文件；单文件不超过 10 MB；合计不超过 30 MB。
 6. 以 brief 和参考文件内容哈希去重。活动任务继续原 job_id；已下载的相同任务直接返回现有 PNG，绝不因轮询或下载失败重复 POST。
-7. 等待程序默认每 600 秒查询任务，代理保持任务打开。发现成功状态后立即领取；若结果仍未就绪，继续原任务等待。`cancelled`、`expired`、`failed` 按终态处理。
+7. 设置或复用每 20 分钟唤醒任务，结束当前回复。每次唤醒只检查原任务，发现成功且费用已获授权后领取；结果仍未就绪则结束本轮。`cancelled`、`expired`、`failed` 按终态处理并暂停自动任务。
 8. PNG 必须通过签名、完整解码及宽高检查才标记完成。下载临时失败只重试同一 `/result`。
 9. PNG 验证成功后再次实时查询余额。服务端余额和扣费字段是唯一真值，不自行计算。
 
@@ -77,7 +78,7 @@ API 默认固定为 `https://xiaomiao-ai.com`，接口契约见 [API 合同](ref
 
 仅当状态接口明确表明未结算时，才能说“查询时尚未结算”；不能仅凭本地 `charged=false` 作此判断。
 
-提交状态只作为进度更新，不能作为最终回复。已获得服务端额度字段时可显示预留和剩余额度；没有字段时不编造。等待期间简短说明有意义的状态，不展示请求头、Key、端点、JSON、哈希、SQLite、重试和轮询细节。
+设置定时检查成功后，可结束本轮并告知“已安排每 20 分钟自动检查，图片返回后交付”，不能说图片已完成。已获得服务端额度字段时可显示预留和剩余额度；没有字段时不编造。只通知有意义的变化，不展示请求头、Key、端点、JSON、哈希、SQLite、重试和轮询细节。
 
 成功后在最终回复中展示一张返回的 `final.png`，并提供可打开的本地文件链接和再次查询得到的当前余额。先确认文件实际存在，不能只返回任务 ID、结果目录或“已完成”。若展示工具不可用，至少交付可打开的图片文件链接。失败时只说明真实、可行动的原因。任何地方都不得输出完整 API Key、Authorization、客户科研内容或原始响应体。
 

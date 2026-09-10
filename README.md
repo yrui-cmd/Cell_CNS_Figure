@@ -1,12 +1,12 @@
 # cell_figure
 
-小描期刊图 API 的 Python 客户端与 Codex Skill。接收科研文字及可选 JPG、PNG、PDF 参考文件，查询额度、提交异步任务，并持续等待、领取和交付 PNG。
+小描期刊图 API 的 Python 客户端与 Codex Skill。接收科研文字及可选 JPG、PNG、PDF 参考文件，查询额度、提交异步任务，每 20 分钟自动唤醒检查并领取 PNG。
 
-**生成任务必须等到图片返回并交付才结束。提交成功或后台运行都不算完成，不需要用户再次发送“继续”。** 用户主动停止、服务明确失败或出现鉴权等真实阻塞时，会说明原因并保留原任务。
+**提交并设置定时检查后，当前回复先结束；每 20 分钟醒来查看，有图就下载交付，无新结果则保持安静。** 图片交付才算生成完成，不需要用户再次发送“继续”。成功交付、用户停止、服务明确失败或需要用户处理的问题会停止自动检查。
 
 显示名称为 `cell_figure`，Codex 调用标识为 `$cell-figure`。
 
-An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: submit research text and optional references, check credits, resume asynchronous jobs, and wait until the final PNG is retrieved and delivered. The remote generation service is separate from this open-source client.
+An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: submit research text and optional references, check credits, and schedule a check every 20 minutes until the final PNG is retrieved and delivered. Each check ends instead of keeping the conversation running. The remote generation service is separate from this open-source client.
 
 ## 目录
 
@@ -20,7 +20,7 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 ## 功能
 
 - 接收科研文字和 JPG、PNG、PDF 参考文件，提交前显示实时额度。
-- 保存任务 ID，持续等待并领取图片；中断后恢复同一任务，复用已经下载的结果。
+- 保存任务 ID，每 20 分钟定时检查并领取图片；中断后恢复同一任务，复用已经下载的结果。
 - 验证返回 PNG 的文件签名、完整解码及尺寸，下载后再次查询余额。
 - 提供可独立使用的命令行客户端、Codex Skill 和[接口说明](references/api-contract.md)。
 
@@ -49,22 +49,20 @@ python -X utf8 scripts/xiaomiao_client.py balance
 # 提交，立即核对服务端实际预留额度
 python -X utf8 scripts/xiaomiao_client.py submit --text-file research.txt --reference reference.png
 
-# 费用核对并获授权后，继续等待同一任务直到图片返回
-python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait
-
-# 查看已提交任务
+# Skill 在核对费用后使用 Codex 自动任务工具设置每 20 分钟检查
+# 每次唤醒查询一次原任务
 python -X utf8 scripts/xiaomiao_client.py status JOB_ID
 
-# 恢复原任务，继续等待并领取图片
-python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait
+# 已完成且费用获授权时领取 PNG
+python -X utf8 scripts/xiaomiao_client.py fetch JOB_ID
 
-# Windows 登录后自动启动（可选）
-python -X utf8 scripts/xiaomiao_client.py install-autostart
+# 独立 CLI 用户明确需要持续等待时（不是 Skill 默认流程）
+python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait
 ```
 
-研究内容限制为 1–12000 字符；参考文件最多 6 个，单个不超过 10 MB，合计不超过 30 MB。默认每 600 秒查询一次，在查询发现完成时立即下载。电脑需要保持运行和联网。
+研究内容限制为 1–12000 字符；参考文件最多 6 个，单个不超过 10 MB，合计不超过 30 MB。Skill 默认每 20 分钟通过 Codex 自动任务唤醒一次，发现完成后领取图片。详细流程见 [定时检查](references/scheduled-checks.md)。
 
-`run` 和 `resume` 默认等待可用 PNG，不设置总等待时限。Skill 使用“提交 → 核对预留费用 → 恢复等待”，避免等到图返回才发现费用变化；费用核对后持续执行到交付图片。服务器返回完成但图片暂未就绪时，继续等待原任务。独立命令行用户明确希望后台运行时，可加 `--background`。
+Skill 使用“提交 → 核对预留费用 → 设置每 20 分钟唤醒 → 结束本轮”，后续自动检查同一任务；设置失败会明确说明，不会假称已安排。服务器返回完成但图片暂未就绪时，下一轮再查原任务。独立 CLI 的 `run` 和 `resume` 仍默认持续等待，`--background` 可供明确需要常驻 worker 的用户选择；这些命令本身不会创建 Codex 自动任务。
 
 Windows 默认结果位置为 `%LOCALAPPDATA%\cell_figure\results\<job_id>\final.png`；macOS/Linux 为 `${XDG_DATA_HOME:-~/.local/share}/cell-figure/results/<job_id>/final.png`。
 
@@ -91,7 +89,7 @@ python -B -X utf8 scripts/test_billing_display.py -v
 
 测试使用临时数据目录、临时桌面和本地模拟服务，覆盖余额、PNG 领取、基本去重、额度不足、参考数量限制、桌面凭据发现和凭据输出检查。等待测试覆盖默认持续等待、多轮处理中、结果未就绪、短暂服务错误、恢复时不重复提交以及真实失败退出。后台测试覆盖重复启动时进程仍存活，以及成功状态别名在下载失败后的恢复，不产生线上费用。模拟测试通过不等同于所有故障场景已验证。
 
-Skill 默认在当前对话持续等待并交付图片。若用户关闭应用、电脑断电或明确选用后台模式，客户端无法自行唤醒已经结束的 Codex 对话；应通过 `resume JOB_ID --wait` 继续原任务。重启后的独立后台恢复依赖重新启动 worker 或安装登录启动项。多进程并发提交、提交响应丢失时的端到端幂等保证、worker 单实例锁以及所有异常场景的恢复仍需完善；服务器应提供幂等提交支持后再用于严格计费场景。过期任务不会自动重新提交。
+定时检查依赖 Codex 自动任务能力；本地脚本任务需要电脑开机、联网且 Codex 应用在后台运行，不必一直停留在当前对话。关闭应用或关机时不能保证按时检查，详见 [官方自动任务说明](https://learn.chatgpt.com/docs/automations?surface=app)。每次唤醒复用原任务，交付或终止后暂停计划；缺少调度工具时会报告限制。多进程并发提交、提交响应丢失时的端到端幂等保证、worker 单实例锁以及所有异常场景的恢复仍需完善；服务器应提供幂等提交支持后再用于严格计费场景。过期任务不会自动重新提交。
 
 请勿将 API Key、客户科研内容、参考文件、任务数据库或生成结果放入公开 issue。
 

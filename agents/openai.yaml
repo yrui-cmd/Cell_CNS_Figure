@@ -1,6 +1,6 @@
 interface:
   display_name: "cell_figure"
-  short_description: "提交小描期刊图任务，持续等待并交付返回的 PNG 后结束"
-  default_prompt: "使用 $cell-figure 把我的科研内容和可选参考文件提交到小描，必须持续等待到 PNG 返回并交付给我才结束，同时显示实时余额。"
+  short_description: "提交小描期刊图任务，每二十分钟自动唤醒检查并交付返回的图片"
+  default_prompt: "使用 $cell-figure 把我的科研内容和可选参考文件提交到小描，显示实时余额并核对费用，设置每 20 分钟自动唤醒检查，当前回复先结束；图片返回后下载并交付给我。"
 policy:
   allow_implicit_invocation: true
