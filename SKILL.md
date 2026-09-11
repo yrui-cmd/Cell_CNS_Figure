@@ -1,17 +1,17 @@
 ---
 name: cell-figure
-description: Submit research text and optional JPG, PNG, or PDF references to the Xiaomiao journal-figure API, show the live balance, and schedule checks every 20 minutes until the verified PNG is retrieved and delivered. Persist and resume the same job across interruptions. Use for Xiaomiao journal figures or Xiaomiao API balance; do not use for path recognition or local figure generation.
+description: Submit research text and optional JPG, PNG, or PDF references to the Xiaomiao journal-figure API, show the live balance, and schedule checks every 3 minutes for stage A and every 20 minutes for stage B until the verified PNG is retrieved and delivered. Persist and resume the same job across interruptions. Use for Xiaomiao journal figures or Xiaomiao API balance; do not use for path recognition or local figure generation.
 ---
 
 # cell_figure
 
-完成“布局图 A → 高级设计图 B”的两阶段科研绘图。仅在收集内容、选择布局与确认费用时询问用户，提交后每 20 分钟自动检查并交付 PNG。用户要求更新、安装或查看本 Skill 时，只处理 Skill，不启动绘图、不查询业务余额、不索要布局图。
+完成“布局图 A → 高级设计图 B”的两阶段科研绘图。仅在收集内容、选择布局与确认费用时询问用户，提交后按阶段间隔（A 每 3 分钟、B 每 20 分钟）自动检查并交付 PNG。用户要求更新、安装或查看本 Skill 时，只处理 Skill，不启动绘图、不查询业务余额、不索要布局图。
 
-## 完成条件与每 20 分钟唤醒
+## 完成条件与按阶段间隔（A 每 3 分钟、B 每 20 分钟）唤醒
 
 **图片下载、验证并交付才算生成任务完成；成功设置定时检查后，当前回复应结束，等待下一次唤醒。** “已提交”或服务器的 `completed` 状态不等于图片已交付。不要让当前对话一直运行。
 
-- 默认使用 Codex 当前对话的定时唤醒，每 20 分钟检查原任务一次；必须实际创建或复用自动任务成功后，才能告诉用户已安排唤醒。具体步骤见 [定时检查](references/scheduled-checks.md)。
+- 默认使用 Codex 当前对话的定时唤醒，按阶段间隔（A 每 3 分钟、B 每 20 分钟）检查原任务一次；必须实际创建或复用自动任务成功后，才能告诉用户已安排唤醒。具体步骤见 [定时检查](references/scheduled-checks.md)。
 - 不用长时间 sleep、持续工具等待、`resume --wait` 或常驻 worker 代替定时唤醒。每轮无结果就结束，等待下一次计划运行；无实质变化时保持安静，不要求用户发“继续”。
 - `received`、`queued`、`awaiting_result`、`processing`、结果暂未就绪或短暂网络错误均留待下一轮检查同一 job_id，禁止重复提交和扣费。
 - 成功交付、用户要求停止或服务明确失败/取消/过期后，暂停对应自动任务。鉴权、权限或费用问题需要用户处理时说明原因并暂停；定时检查不构成额外费用授权。
@@ -32,7 +32,7 @@ python -X utf8 scripts/configured_client.py submit --text-file <UTF-8文本文�
 python -X utf8 scripts/configured_client.py balance
 ```
 
-显示并核对提交结果的预留额度后，安排每 20 分钟唤醒。每次唤醒查询同一任务；完成且费用已获授权时领取：
+显示并核对提交结果的预留额度后，安排按阶段间隔（A 每 3 分钟、B 每 20 分钟）唤醒。每次唤醒查询同一任务；完成且费用已获授权时领取：
 
 ```text
 python -X utf8 scripts/configured_client.py status <原job_id>
@@ -49,7 +49,7 @@ python -X utf8 scripts/configured_client.py fetch <原job_id>
 4. 提交前实时请求 `/api/balance`，展示可用额度并按下方规则说明费用。客户端的 3 额度只是历史最低余额检查门槛，不是服务报价，禁止说“本次只需 3 额度”。余额缺失、鉴权失败、权限被禁用或服务不可确认时停止，不猜测；不得超出用户明确的额度上限。
 5. 本地预检：brief 为 1–12000 字符；最多 6 个参考文件；单文件不超过 10 MB；合计不超过 30 MB。
 6. 以 brief 和参考文件内容哈希去重。活动任务继续原 job_id；已下载的相同任务直接返回现有 PNG，绝不因轮询或下载失败重复 POST。
-7. 设置或复用每 20 分钟唤醒任务，结束当前回复。每次唤醒只检查原任务，发现成功且费用已获授权后领取；结果仍未就绪则结束本轮。`cancelled`、`expired`、`failed` 按终态处理并暂停自动任务。
+7. 设置或复用按阶段间隔（A 每 3 分钟、B 每 20 分钟）唤醒任务，结束当前回复。每次唤醒只检查原任务，发现成功且费用已获授权后领取；结果仍未就绪则结束本轮。`cancelled`、`expired`、`failed` 按终态处理并暂停自动任务。
 8. PNG 必须通过签名、完整解码及宽高检查才标记完成。下载临时失败只重试同一 `/result`。
 9. PNG 验证成功后再次实时查询余额。服务端余额和扣费字段是唯一真值，不自行计算。
 
@@ -81,13 +81,13 @@ API 默认固定为 `https://xiaomiao-ai.com`，接口契约见 [API 合同](ref
 
 ### 自动检查与交付
 
-提交后告知“请预留约半小时，系统每 20 分钟自动检查并领取”，实际创建自动任务成功后结束本轮。每阶段保存独立提交时间与 job_id，查询原任务，不重复提交。
+第一阶段提交后告知“布局图 A 已提交，每 3 分钟自动检查，返回后领取”；第二阶段告知“请预留约半小时，每 20 分钟自动检查并领取”，实际创建自动任务成功后结束本轮。每阶段保存独立提交时间与 job_id，查询原任务，不重复提交。
 
-超过 1 小时尚无有效结果图时只提醒一次：“好兄弟，等待已超过一小时，可以到抖音「木纹」主页群询问处理情况，系统仍会继续检查。”每 20 分钟检查直到交付或终止。
+超过 1 小时尚无有效结果图时只提醒一次：“好兄弟，等待已超过一小时，可以到抖音「木纹」主页群询问处理情况，系统仍会继续检查。”按阶段间隔（A 每 3 分钟、B 每 20 分钟）检查直到交付或终止。
 
 超过 24 小时仍无有效结果图，标记本地超时失败、暂停自动任务并通知用户；不声称服务端一定 failed 或已经取消。服务端明确失败、取消或过期可提前终止。图 A 交付后等待第二阶段选择；图 B 交付后结束整个流程。有效本地结果优先交付，不因远端过期忽略已下载文件。
 
-设置定时检查成功后，可结束本轮并告知“已安排每 20 分钟自动检查，图片返回后交付”，不能说图片已完成。已获得服务端额度字段时可显示预留和剩余额度；没有字段时不编造。只通知有意义的变化，不展示请求头、Key、端点、JSON、哈希、SQLite、重试和轮询细节。
+设置定时检查成功后，可结束本轮并告知“已安排按阶段间隔（A 每 3 分钟、B 每 20 分钟）自动检查，图片返回后交付”，不能说图片已完成。已获得服务端额度字段时可显示预留和剩余额度；没有字段时不编造。只通知有意义的变化，不展示请求头、Key、端点、JSON、哈希、SQLite、重试和轮询细节。
 
 成功后在最终回复中展示一张返回的 `final.png`，并提供可打开的本地文件链接和再次查询得到的当前余额。先确认文件实际存在，不能只返回任务 ID、结果目录或“已完成”。若展示工具不可用，至少交付可打开的图片文件链接。失败时只说明真实、可行动的原因。任何地方都不得输出完整 API Key、Authorization、客户科研内容或原始响应体。
 

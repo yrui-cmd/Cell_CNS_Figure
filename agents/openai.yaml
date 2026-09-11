@@ -1,6 +1,6 @@
 interface:
   display_name: "cell_figure"
-  short_description: "两阶段科研绘图，逐阶段展示费用和余额，每二十分钟检查并交付图片"
-  default_prompt: "使用 $cell-figure 完成布局图 A 到高级设计图 B 的流程，分别确认第一阶段 5 次与第二阶段 20 次额度，读取共享配置并自动检查返回结果。"
+  short_description: "两阶段科研绘图，逐阶段展示费用和余额，布局每三分钟、高级每二十分钟检查"
+  default_prompt: "使用 $cell-figure 完成布局图 A 到高级设计图 B 的流程，分别确认第一阶段 5 次与第二阶段 20 次额度，读取共享配置，第一阶段每3分钟、第二阶段每20分钟检查返回结果。"
 policy:
   allow_implicit_invocation: true
