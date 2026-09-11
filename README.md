@@ -1,6 +1,6 @@
 # cell_figure
 
-小描期刊图 API 的 Python 客户端与 Codex Skill。接收科研文字及可选 JPG、PNG、PDF 参考文件，查询额度、提交异步任务，每 20 分钟自动唤醒检查并领取 PNG。
+小描期刊图 API 客户端与两阶段科研绘图 Skill：先获得布局图 A，再由用户选择是否生成高级设计图 B。每阶段分别展示费用与实时余额，提交后每 20 分钟自动检查。
 
 **提交并设置定时检查后，当前回复先结束；每 20 分钟醒来查看，有图就下载交付，无新结果则保持安静。** 图片交付才算生成完成，不需要用户再次发送“继续”。成功交付、用户停止、服务明确失败或需要用户处理的问题会停止自动检查。
 
@@ -28,11 +28,13 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 
 需要 Python 3.10 或更高版本。可直接把下面这句话发给 Codex：
 
-> 请从 https://github.com/yrui-cmd/cell_figure 安装 cell-figure skill，并安装 requirements.txt 中的依赖。
+> 请从 https://github.com/yrui-cmd/cell_figure 安装 cell-figure，并将仓库 dependencies/xiaomiao-api-setup 安装为同级 Skill，安装 requirements.txt 中的依赖。
 
 也可下载仓库 ZIP，解压后将包含 `SKILL.md` 的目录命名为 `cell-figure`，放入用户的 `.codex/skills/`。Windows 默认位置是 `%USERPROFILE%\.codex\skills\cell-figure`；macOS/Linux 默认位置是 `~/.codex/skills/cell-figure`。若已有该目录，先保留自己的版本与改动。
 
-在该目录运行：
+将仓库内 `dependencies/xiaomiao-api-setup` 文件夹复制到同一级 `.codex/skills/xiaomiao-api-setup`；已有配置助手时保留用户修改并先比较版本。该依赖不包含真实密钥。
+
+在 cell-figure 目录运行：
 
 ```sh
 python -m pip install -r requirements.txt
@@ -44,17 +46,17 @@ python -m pip install -r requirements.txt
 
 ```sh
 # 查询实时余额
-python -X utf8 scripts/xiaomiao_client.py balance
+python -X utf8 scripts/configured_client.py balance
 
 # 提交，立即核对服务端实际预留额度
-python -X utf8 scripts/xiaomiao_client.py submit --text-file research.txt --reference reference.png
+python -X utf8 scripts/configured_client.py submit --text-file research.txt --reference reference.png
 
 # Skill 在核对费用后使用 Codex 自动任务工具设置每 20 分钟检查
 # 每次唤醒查询一次原任务
-python -X utf8 scripts/xiaomiao_client.py status JOB_ID
+python -X utf8 scripts/configured_client.py status JOB_ID
 
 # 已完成且费用获授权时领取 PNG
-python -X utf8 scripts/xiaomiao_client.py fetch JOB_ID
+python -X utf8 scripts/configured_client.py fetch JOB_ID
 
 # 独立 CLI 用户明确需要持续等待时（不是 Skill 默认流程）
 python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait
@@ -68,17 +70,19 @@ Windows 默认结果位置为 `%LOCALAPPDATA%\cell_figure\results\<job_id>\final
 
 ## 凭据和费用
 
-客户端会读取当前进程的 `XIAOMIAO_API_KEY`、本客户端安全凭据，以及用户真实桌面上的 `Cell_skills.txt`。桌面文件支持 `XIAOMIAO_API_KEY=<你的Key>`、`小描=<你的Key>` 或单行 Key。请勿提交该文件到 Git。
+默认通过 xiaomiao-api-setup 每次重新读取桌面隐藏文件 `xiaomiao_api.txt`，格式为 `API_Key=""`；支持聊天输入密钥后写入文件。固定入口 `configured_client.py` 只读取共享文件，鉴权失败也不回退旧环境变量或历史账户。原独立 CLI 保留兼容行为，不作为 Skill 默认入口。
 
-你也可以在当前助手对话中提供自己的 Key，让助手通过 `configure-key` 的标准输入完成配置，无需把 Key 写入脚本或命令参数；聊天本身仍由所用平台保存和管理。
+隐藏文件是明文，不等于加密。Android 使用 Python 宿主可访问的隐藏配置目录；macOS/Android 待实机验证。内容和图片会发送到小描服务。
 
-Windows 安全存储使用当前用户的 DPAPI 加密。macOS/Linux 使用权限为 `0600` 的本地私有文件，不是加密钥匙串。客户端源码开源；小描远程服务需要独立 API Key 和额度。输入文字与参考文件会发送到 `https://xiaomiao-ai.com`。
+产品流程：第一阶段布局设计 5 次额度；第二阶段高级设计另计 20 次；两阶段合计 25 次。自带图 A 跳过第一阶段，只做第二阶段计 20 次。每阶段确认时显示实时余额及“开始设计后不退额度”，拒绝第二阶段则交付图 A 后结束。
 
-**旧版“本次需要 3 额度”的提示不准确。** 3 只是客户端历史最低余额检查门槛，不能视为报价。2026-09-10 实际观察到单次任务预留 **20 额度**；该数字是费用参考，不是固定价格或最终扣费承诺。
+**第一阶段的 5 次产品价格尚须与服务端对齐。** 已知期刊图接口此前预留 20 次；不能拿 5 次授权提交已知会预留 20 次的请求。本版本更新流程，不更改服务端计费或退款实现；实际费用超出授权时停止，不静默超额。
 
-每次先查实时余额，提交后立即显示服务端实际预留和返回的可用余额。缺失金额不补造，预留与最终扣费分别说明。若实际预留与已告知金额不一致、金额未知或超出授权范围，先暂停本地自动领取并询问用户，确认后继续原任务。暂停本地程序不等于取消远端生成，也不能保证服务端不会继续结算；不会擅自取消或重新提交。
+每阶段超过一小时未返回图片提醒一次联系抖音「木纹」主页群，继续查询；超过24小时无有效结果则标记本地超时失败并停止自动检查。超时不代表远端取消或退款。图 A、图 B 分开交付，不覆盖原图。
 
 ## 验证与当前边界
+
+两阶段选择、费用授权、阶段记录及超时调度由 Skill 指令与 Codex 自动任务执行；现有 Python 客户端负责接口和下载，不宣称已实现完整的独立两阶段调度引擎。
 
 ```sh
 python -B -X utf8 scripts/test_client.py
