@@ -12,6 +12,7 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 
 - [功能](#功能)
 - [客户使用教程](客户使用教程.md)
+- [下载 Word 版客户使用教程](Cell_CNS_Figure 客户使用教程.docx)
 - [安装](#安装)
 - [使用](#使用)
 - [凭据和费用](#凭据和费用)
