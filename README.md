@@ -11,6 +11,7 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 ## 目录
 
 - [功能](#功能)
+- [客户使用教程](客户使用教程.md)
 - [安装](#安装)
 - [使用](#使用)
 - [凭据和费用](#凭据和费用)
@@ -28,7 +29,7 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 
 需要 Python 3.10 或更高版本。可直接把下面这句话发给 Codex：
 
-> 请从 https://github.com/yrui-cmd/cell_figure 安装 cell-cns-figure，并将仓库 dependencies/xiaomiao-api-setup 安装为同级 Skill，安装 requirements.txt 中的依赖。
+> 请从 https://github.com/yrui-cmd/Cell_CNS_Figure 安装 cell-cns-figure，并将仓库 dependencies/xiaomiao-api-setup 安装为同级 Skill，安装 requirements.txt 中的依赖。
 
 也可下载仓库 ZIP，解压后将包含 `SKILL.md` 的目录命名为 `cell-cns-figure`，放入用户的 `.codex/skills/`。Windows 默认位置是 `%USERPROFILE%\.codex\skills\cell-cns-figure`；macOS/Linux 默认位置是 `~/.codex/skills/cell-cns-figure`。若已有该目录，先保留自己的版本与改动。
 
