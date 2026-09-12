@@ -30,7 +30,7 @@
 
 ## 终态
 
-计费规则：仅文字的第一阶段扣 5 次额度；文字加图 A 的第二阶段扣 20 次额度，提交成功即扣费，领取结果不重复扣费。费用展示读取本次响应的 credits_used、credits_left、billing 和 charged_at；金额缺失保持未知，零值保留。reserved_credits（兼容 credits_reserved）仅作为历史响应兼容字段，不作为当前阶段报价。
+计费规则：仅文字的第一阶段扣 10 次额度；文字加图 A 的第二阶段扣 45 次额度，提交成功即扣费，领取结果不重复扣费。费用展示读取本次响应的 credits_used、credits_left、billing 和 charged_at；金额缺失保持未知，零值保留。reserved_credits（兼容 credits_reserved）仅作为历史响应兼容字段，不作为当前阶段报价。
 
 - 成功：`completed`、`complete`、`succeeded`、`success`
 - 失败：`failed`、`error`、`cancelled`、`canceled`、`expired`

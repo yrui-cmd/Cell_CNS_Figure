@@ -19,7 +19,7 @@ python -B -X utf8 scripts/xiaomiao_setup.py
 
 用户本次在聊天提供密钥时，加 `--stdin-key`，通过标准输入传入原始密钥，不能放在脚本的命令行参数或持久化脚本里。脚本清理首尾空白并写入文件，然后用同一密钥查询。不要读取其他 Skill 的历史密钥、环境变量或桌面其他文件来补齐。
 
-用户已经选定功能时可加 `--feature images`、`--feature journal_figure` 或 `--feature watermark`。未选功能不加，余额低于 20 但大于零不代表所有功能不可用。
+用户已经选定功能时可加 `--feature images`、`--feature journal_figure` 或 `--feature watermark`。未选功能不加，余额低于 45 但大于零不代表所有功能不可用。
 
 默认 Windows/macOS 使用实际桌面 `xiaomiao_api.txt`，格式 `API_Key=""`；Android 使用 Python 宿主用户目录下 `.config/xiaomiao/xiaomiao_api.txt`，不假设有桌面。只有用户明确指定目录才用 `--file`。隐藏只是减少显示，不是加密。
 

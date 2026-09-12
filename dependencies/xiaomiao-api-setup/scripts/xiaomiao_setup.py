@@ -17,7 +17,7 @@ from urllib import request, error
 BALANCE_URL = 'https://xiaomiao-ai.com/api/balance'
 FEATURES = (
     ('images', '图片路径识别', '/api/images', 1),
-    ('journal_figure', '期刊图生成', '/api/journal-figure-jobs', 20),
+    ('journal_figure', '期刊图生成', '/api/journal-figure-jobs', 45),
     ('watermark', '图片去水印', '/api/watermark-jobs', 1),
 )
 MESSAGES = {
