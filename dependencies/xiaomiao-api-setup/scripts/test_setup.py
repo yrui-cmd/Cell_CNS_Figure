@@ -70,6 +70,13 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.call(transport=Transport(response()))['status'], 'ok')
         self.assertEqual(self.path.read_text(), 'API_Key="' + KEY + '"\n')
 
+    def test_trial_invitation_is_accepted_and_redacted(self):
+        invitation = 'jexp_TEST_ONLY_TRIAL'
+        report = self.call(supplied=' ' + invitation + '\n', transport=Transport(response(1)))
+        self.assertEqual(report['status'], 'ok')
+        self.assertEqual(self.path.read_text(), 'API_Key="' + invitation + '"\n')
+        self.assertNotIn(invitation, json.dumps(report))
+
     def test_every_call_reads_file_including_chat(self):
         transport = Transport(response(), response())
         with patch.object(m, 'read_key', wraps=m.read_key) as reader:
@@ -83,7 +90,7 @@ class SetupTests(unittest.TestCase):
 
     def test_invalid_input_preserves_file(self):
         m.atomic_write(self.path, KEY)
-        for value in ('img_live_a.b c', 'API_Key="x"; print(1)'):
+        for value in ('img_live_a.b c', 'jexp_a b', 'API_Key="x"; print(1)'):
             result = self.call(supplied=value)
             self.assertEqual(result['status'], 'invalid_config')
             self.assertEqual(m.read_key(self.path), KEY)

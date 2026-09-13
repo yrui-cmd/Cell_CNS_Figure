@@ -72,7 +72,14 @@ def normalize_key(value):
     value = value.strip()
     if not value:
         return ''
-    if not re.fullmatch(r'img_live_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', value):
+    # A jexp_ credential is a server-issued, one-time trial invitation.  It is
+    # sent to the same bearer endpoint as a normal key, so it follows the same
+    # storage and redaction rules.  The server, not this client, decides its
+    # scope and whether it has already been consumed.
+    if not re.fullmatch(
+        r'(?:img_live_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|jexp_[A-Za-z0-9_-]+)',
+        value,
+    ):
         raise SetupError('invalid_config')
     return value
 

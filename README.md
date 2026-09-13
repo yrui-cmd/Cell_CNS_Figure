@@ -72,7 +72,7 @@ Windows 默认结果位置为 `%LOCALAPPDATA%\cell_figure\results\<job_id>\final
 
 ## 凭据和费用
 
-默认通过 xiaomiao-api-setup 每次重新读取桌面隐藏文件 `xiaomiao_api.txt`，格式为 `API_Key=""`；支持聊天输入密钥后写入文件。固定入口 `configured_client.py` 只读取共享文件，鉴权失败也不回退旧环境变量或历史账户。原独立 CLI 保留兼容行为，不作为 Skill 默认入口。
+默认通过 xiaomiao-api-setup 每次重新读取桌面隐藏文件 `xiaomiao_api.txt`，格式为 `API_Key=""`；支持聊天输入正式 API Key 或服务端签发的 `jexp_…` 一次体验邀请码后写入文件。邀请码仅在服务端验证有效、可用于期刊图且尚未用完时才能运行一次体验流程；不要将邀请码提交到公开仓库、Issue 或教程示例。固定入口 `configured_client.py` 只读取共享文件，鉴权失败也不回退旧环境变量或历史账户。原独立 CLI 保留兼容行为，不作为 Skill 默认入口。
 
 隐藏文件是明文，不等于加密。Android 使用 Python 宿主可访问的隐藏配置目录；macOS/Android 待实机验证。内容和图片会发送到小描服务。
 

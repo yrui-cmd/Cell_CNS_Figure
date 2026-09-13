@@ -21,7 +21,9 @@ python -B -X utf8 scripts/xiaomiao_setup.py
 
 用户已经选定功能时可加 `--feature images`、`--feature journal_figure` 或 `--feature watermark`。未选功能不加，余额低于 45 但大于零不代表所有功能不可用。
 
-默认 Windows/macOS 使用实际桌面 `xiaomiao_api.txt`，格式 `API_Key=""`；Android 使用 Python 宿主用户目录下 `.config/xiaomiao/xiaomiao_api.txt`，不假设有桌面。只有用户明确指定目录才用 `--file`。隐藏只是减少显示，不是加密。
+默认 Windows/macOS 使用实际桌面 `xiaomiao_api.txt`，格式 `API_Key=""`；Android 使用 Python 宿主用户目录下 `.config/xiaomiao/xiaomiao_api.txt`，不假设有桌面。该字段可保存正式 `img_live_…` Key，或服务端签发的 `jexp_…` 一次体验邀请码；只有用户明确指定目录才用 `--file`。隐藏只是减少显示，不是加密。
+
+`jexp_…` 邀请码可以直接由用户发送到聊天中配置。它仍会先请求实时余额；仅当服务端接受该凭据并允许本次功能时才提交。不要把邀请码写入公开仓库、教程示例或日志，也不要在本地声明“已免费”或“未使用”——这些状态以服务端返回为准。
 
 已有必要文件读写、网络权限就直接执行；缺少时只说明具体权限与操作，不要求最高权限，不绕过系统限制。Android 需要可运行 Python 的宿主（如 Termux）；普通浏览器不能凭本 Skill 取得文件权限。
 
