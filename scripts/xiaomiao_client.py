@@ -32,7 +32,7 @@ ENDPOINTS = {
     "submit": "/api/journal-figure-jobs",
     "status": "/api/journal-figure-jobs/{job_id}",
     "result": "/api/journal-figure-jobs/{job_id}/result",
-    "pptx": "/api/internal/journal-figure-jobs/{job_id}/pptx",
+    "pptx": "/api/journal-figure-jobs/{job_id}/pptx",
     "cancel": "/api/journal-figure-jobs/{job_id}",
 }
 MINIMUM_BALANCE_CHECK = 3  # Legacy local floor, not a service price or reservation quote.

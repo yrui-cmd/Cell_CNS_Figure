@@ -122,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         if not self.authorized():
             return
-        if self.path != "/api/internal/journal-figure-jobs/jfig_test_001/pptx":
+        if self.path != "/api/journal-figure-jobs/jfig_test_001/pptx":
             return self.send_json({"error": "not found"}, 404)
         Handler.pptx_count += 1
         self.send_response(200)
