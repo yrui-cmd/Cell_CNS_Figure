@@ -18,8 +18,8 @@ def main():
         key = setup.read_key(setup.config_path())
         return [('shared_config', key)] if key else []
     client.CredentialManager.discover = discover
-    if len(sys.argv) < 2 or sys.argv[1] not in {'balance', 'submit', 'status', 'fetch', 'cancel'}:
-        print('{"ok":false,"error":"只支持 balance、submit、status、fetch、cancel"}')
+    if len(sys.argv) < 2 or sys.argv[1] not in {'balance', 'submit', 'status', 'fetch', 'fetch-pptx', 'cancel'}:
+        print('{"ok":false,"error":"只支持 balance、submit、status、fetch、fetch-pptx、cancel"}')
         return 2
     try:
         return client.main()

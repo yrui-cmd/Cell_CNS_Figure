@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import zipfile
 
 
 PNG = base64.b64decode(
@@ -20,10 +22,22 @@ PNG = base64.b64decode(
 KEY = "img_live_test_secret_1234"
 
 
+def minimal_pptx() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("ppt/presentation.xml", "<p:presentation/>")
+    return output.getvalue()
+
+
+PPTX = minimal_pptx()
+
+
 class Handler(BaseHTTPRequestHandler):
     post_count = 0
     status_count = 0
     result_count = 0
+    pptx_count = 0
     balance = 39
     status_errors_left = 3
     result_errors_left = 3
@@ -105,6 +119,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json({"job_id": "jfig_test_001", "status": "cancelled"})
 
+    def do_PUT(self):
+        if not self.authorized():
+            return
+        if self.path != "/api/internal/journal-figure-jobs/jfig_test_001/pptx":
+            return self.send_json({"error": "not found"}, 404)
+        Handler.pptx_count += 1
+        self.send_response(200)
+        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        self.send_header("Content-Length", str(len(PPTX)))
+        self.end_headers()
+        self.wfile.write(PPTX)
+
 
 def call(script: Path, env: dict[str, str], *args: str, expect: int = 0, stdin: str | None = None):
     result = subprocess.run(
@@ -159,6 +185,13 @@ def main() -> None:
             assert Handler.post_count == 1
             assert Handler.status_count == 6, "processing and completed/result-409 must keep polling"
             assert Handler.result_count == 6, "409 and exhausted 503 retries must not finish early"
+
+            pptx = call(script, env, "fetch-pptx", "jfig_test_001")
+            assert pptx["pptx_downloaded"] is True
+            assert Path(pptx["pptx_path"]).read_bytes() == PPTX
+            repeated_pptx = call(script, env, "fetch-pptx", "jfig_test_001")
+            assert repeated_pptx["pptx_path"] == pptx["pptx_path"]
+            assert Handler.pptx_count == 1, "cached PPTX must not call the server again"
 
             repeated = call(
                 script, env, "run", "--wait", "--interval", "0.1", "--timeout", "5",

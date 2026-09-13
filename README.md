@@ -23,7 +23,7 @@ An MIT-licensed Python client and Codex skill for Xiaomiao scientific figures: s
 
 - 仅接收文章摘要或核心研究文字；第一阶段生成图 A，第二阶段使用图 A 作为参考，提交前显示实时额度。
 - 保存任务 ID，按阶段间隔（A 每 3 分钟、B 每 10 分钟）定时检查并领取图片；中断后恢复同一任务，复用已经下载的结果。
-- 验证返回 PNG 的文件签名、完整解码及尺寸，下载后再次查询余额。
+- 验证返回 PNG 的文件签名、完整解码及尺寸；高级图 B 还会领取并验证可编辑 PPTX，下载后再次查询余额。
 - 提供可独立使用的命令行客户端、Codex Skill 和[接口说明](references/api-contract.md)。
 
 ## 安装
@@ -59,6 +59,9 @@ python -X utf8 scripts/configured_client.py status JOB_ID
 
 # 已完成且费用获授权时领取 PNG
 python -X utf8 scripts/configured_client.py fetch JOB_ID
+
+# 高级图 B 的 PNG 已验证后领取可编辑 PPTX
+python -X utf8 scripts/configured_client.py fetch-pptx JOB_ID
 
 # 独立 CLI 用户明确需要持续等待时（不是 Skill 默认流程）
 python -X utf8 scripts/xiaomiao_client.py resume JOB_ID --wait

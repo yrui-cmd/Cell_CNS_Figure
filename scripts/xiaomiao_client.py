@@ -16,6 +16,7 @@ import sys
 import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
+import zipfile
 
 import requests
 from PIL import Image
@@ -31,6 +32,7 @@ ENDPOINTS = {
     "submit": "/api/journal-figure-jobs",
     "status": "/api/journal-figure-jobs/{job_id}",
     "result": "/api/journal-figure-jobs/{job_id}/result",
+    "pptx": "/api/internal/journal-figure-jobs/{job_id}/pptx",
     "cancel": "/api/journal-figure-jobs/{job_id}",
 }
 MINIMUM_BALANCE_CHECK = 3  # Legacy local floor, not a service price or reservation quote.
@@ -39,6 +41,7 @@ RETRY_DELAYS = tuple(float(x) for x in os.environ.get("XIAOMIAO_RETRY_DELAYS", "
 SUCCESS = {"completed", "complete", "succeeded", "success"}
 FAILURE = {"failed", "error", "cancelled", "canceled", "expired"}
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+ZIP_SIGNATURE = b"PK\x03\x04"
 
 
 class ClientError(RuntimeError):
@@ -366,6 +369,61 @@ class XiaomiaoClient:
         follow = self._request("GET", download, key=key)
         return follow.content, follow, metadata
 
+    @staticmethod
+    def _verify_pptx(raw: bytes) -> None:
+        if len(raw) <= len(ZIP_SIGNATURE) or not raw.startswith(ZIP_SIGNATURE):
+            raise ClientError("结果不是有效 PPTX。")
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                names = set(archive.namelist())
+                if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
+                    raise ClientError("PPTX 缺少必需内容。")
+                if archive.testzip() is not None:
+                    raise ClientError("PPTX 压缩内容损坏。")
+        except ClientError:
+            raise
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise ClientError("PPTX 无法完整解码。") from exc
+
+    def pptx_available(self, job_id: str) -> Path | None:
+        path = self.root / "results" / re.sub(r"[^A-Za-z0-9_.-]", "_", job_id) / "final.pptx"
+        try:
+            self._verify_pptx(path.read_bytes())
+        except (OSError, ClientError):
+            return None
+        return path
+
+    def download_pptx(self, job_id: str) -> dict[str, Any]:
+        """Retrieve the editable PPTX supplied for an advanced figure only."""
+        existing = self.pptx_available(job_id)
+        if existing:
+            return {"job_id": job_id, "pptx_path": str(existing), "pptx_downloaded": True}
+        key, _ = self.authenticate()
+        response = self._request("PUT", self.url("pptx", job_id=job_id), key=key)
+        raw = response.content
+        if not raw.startswith(ZIP_SIGNATURE):
+            metadata = self._json(response, "PPTX 接口")
+            encoded = self._first(metadata, "pptx_base64", "file_base64")
+            if encoded:
+                try:
+                    raw = base64.b64decode(str(encoded), validate=True)
+                except Exception as exc:
+                    raise ClientError("结果中的 PPTX Base64 无效。") from exc
+            else:
+                url = self._first(metadata, "pptx_url", "download_url", "result_url")
+                if not url:
+                    raise ClientError("PPTX 接口没有返回文件。")
+                raw = self._request("GET", str(url), key=key).content
+        self._verify_pptx(raw)
+        result_dir = self.root / "results" / re.sub(r"[^A-Za-z0-9_.-]", "_", job_id)
+        result_dir.mkdir(parents=True, exist_ok=True)
+        target = result_dir / "final.pptx"
+        temp = result_dir / "final.pptx.part"
+        temp.write_bytes(raw)
+        self._verify_pptx(temp.read_bytes())
+        os.replace(temp, target)
+        return {"job_id": job_id, "pptx_path": str(target), "pptx_downloaded": True}
+
     def downloaded_result_available(self, job: dict[str, Any] | None) -> bool:
         """A cached completion is usable only while its complete PNG still exists."""
         if not job or not job.get("downloaded") or not job.get("result_path"):
@@ -563,6 +621,7 @@ def emit(value: dict[str, Any]) -> None:
         "ok", "job_id", "status", "reused", "reserved_credits", "credits_left",
         "billing", "charged_at",
         "available_credits", "credits_used", "journal_available", "result_path", "downloaded",
+        "pptx_path", "pptx_downloaded",
         "worker_started", "autostart_installed", "configured",
     }
     print(json.dumps({k: v for k, v in value.items() if k in allowed}, ensure_ascii=False))
@@ -590,7 +649,7 @@ def build_parser() -> argparse.ArgumentParser:
             mode.add_argument("--background", action="store_true", help="仅显式请求时转入后台等待")
             item.add_argument("--interval", type=float, default=POLL_INTERVAL)
             item.add_argument("--timeout", type=float)
-    for name in ("status", "fetch", "cancel"):
+    for name in ("status", "fetch", "fetch-pptx", "cancel"):
         item = sub.add_parser(name)
         item.add_argument("job_id")
     resume = sub.add_parser("resume")
@@ -631,6 +690,8 @@ def main() -> int:
             emit(client.status(args.job_id))
         elif args.command == "fetch":
             emit(client.download(args.job_id))
+        elif args.command == "fetch-pptx":
+            emit(client.download_pptx(args.job_id))
         elif args.command == "cancel":
             emit(client.cancel(args.job_id))
         elif args.command == "resume":

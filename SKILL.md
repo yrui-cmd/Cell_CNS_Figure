@@ -90,7 +90,7 @@ API 默认固定为 `https://xiaomiao-ai.com`，接口契约见 [API 合同](ref
 
 设置定时检查成功后，可结束本轮并告知“已安排按阶段间隔（A 每 3 分钟、B 每 10 分钟）自动检查，图片返回后交付”，不能说图片已完成。已获得服务端额度字段时可显示实际扣费和剩余额度；没有字段时不编造。只通知有意义的变化，不展示请求头、Key、端点、JSON、哈希、SQLite、重试和轮询细节。
 
-成功后在最终回复中展示一张返回的 `final.png`，并提供可打开的本地文件链接和再次查询得到的当前余额。先确认文件实际存在，不能只返回任务 ID、结果目录或“已完成”。若展示工具不可用，至少交付可打开的图片文件链接。失败时只说明真实、可行动的原因。任何地方都不得输出完整 API Key、Authorization、客户科研内容或原始响应体。
+成功后在最终回复中展示一张返回的 `final.png`，并提供可打开的本地文件链接和再次查询得到的当前余额。高级图 B 必须在 PNG 验证后调用 `fetch-pptx <job_id>`，验证并交付同目录的 `final.pptx` 后才算完成；PPTX 尚未就绪时继续检查同一任务，不能把 PNG 单独称为高级图完整交付。先确认文件实际存在，不能只返回任务 ID、结果目录或“已完成”。若展示工具不可用，至少交付可打开的图片文件链接。失败时只说明真实、可行动的原因。任何地方都不得输出完整 API Key、Authorization、客户科研内容或原始响应体。
 
 ## 恢复与安全
 
@@ -112,6 +112,7 @@ API 默认固定为 `https://xiaomiao-ai.com`，接口契约见 [API 合同](ref
 - POST /api/journal-figure-jobs：multipart/form-data，brief 为原文，references 为可选参考文件；第二阶段必须包含图 A。
 - GET /api/journal-figure-jobs/{job_id}：查询原任务。
 - GET /api/journal-figure-jobs/{job_id}/result：领取 PNG。
+- PUT /api/internal/journal-figure-jobs/{job_id}/pptx：仅高级图 B 完成后领取 PPTX。
 - DELETE /api/journal-figure-jobs/{job_id}：仅用户明确要求取消时调用。
 
 每个工作流分别保存原文、图 A、图 B，不能覆盖用户原图。记录每个阶段的 job_id、提交 UTC 时间、费用授权、调度 ID 和一小时提醒标记，中断恢复不重置时间。现有底层客户端保存任务与图片记录；阶段授权和提醒信息必须同时写入工作流记录与调度提示，不能假设旧数据库已有这些字段。

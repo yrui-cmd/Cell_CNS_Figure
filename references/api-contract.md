@@ -9,6 +9,7 @@
 - 提交：`POST /api/journal-figure-jobs`
 - 状态：`GET /api/journal-figure-jobs/{job_id}`
 - 结果：`GET /api/journal-figure-jobs/{job_id}/result`
+- 高级图可编辑文件：`PUT /api/internal/journal-figure-jobs/{job_id}/pptx`
 - 取消：`DELETE /api/journal-figure-jobs/{job_id}`
 - 鉴权：`Authorization: Bearer <API_KEY>`
 
@@ -26,7 +27,7 @@
 
 期刊图权限优先读取 `services` 中的 `journal_figure`、`journal-figure`、`journal` 或 `journal_figure_jobs`。明确 `false`、`disabled` 或 `unavailable` 时禁止提交；旧服务未返回 `services` 时不虚构权限状态，提交接口仍是最终权限判定者。
 
-结果接口可返回 `image/png`、包含结果 URL 的 JSON，或 `image_base64`。外部结果 URL 不携带小描 Bearer；最终只接受可完整解码的 PNG。
+结果接口可返回 `image/png`、包含结果 URL 的 JSON，或 `image_base64`。外部结果 URL 不携带小描 Bearer；最终只接受可完整解码的 PNG。高级图完成后，PPTX 接口可返回直接文件、Base64 或下载地址；仅接受包含 `[Content_Types].xml` 和 `ppt/presentation.xml` 的完整 PPTX。该接口只用于已授权的高级图 B，不对布局图 A 调用。
 
 ## 终态
 
