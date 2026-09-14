@@ -112,7 +112,7 @@ API 默认固定为 `https://xiaomiao-ai.com`，接口契约见 [API 合同](ref
 - POST /api/journal-figure-jobs：multipart/form-data，brief 为原文，references 为可选参考文件；第二阶段必须包含图 A。
 - GET /api/journal-figure-jobs/{job_id}：查询原任务。
 - GET /api/journal-figure-jobs/{job_id}/result：领取 PNG。
-- PUT /api/journal-figure-jobs/{job_id}/pptx：仅高级图 B 完成后领取 PPTX。
+- GET /api/journal-figure-jobs/{job_id}/pptx：仅高级图 B 完成后领取 PPTX。
 - DELETE /api/journal-figure-jobs/{job_id}：仅用户明确要求取消时调用。
 
 每个工作流分别保存原文、图 A、图 B，不能覆盖用户原图。记录每个阶段的 job_id、提交 UTC 时间、费用授权、调度 ID 和一小时提醒标记，中断恢复不重置时间。现有底层客户端保存任务与图片记录；阶段授权和提醒信息必须同时写入工作流记录与调度提示，不能假设旧数据库已有这些字段。

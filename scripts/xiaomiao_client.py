@@ -399,7 +399,7 @@ class XiaomiaoClient:
         if existing:
             return {"job_id": job_id, "pptx_path": str(existing), "pptx_downloaded": True}
         key, _ = self.authenticate()
-        response = self._request("PUT", self.url("pptx", job_id=job_id), key=key)
+        response = self._request("GET", self.url("pptx", job_id=job_id), key=key)
         raw = response.content
         if not raw.startswith(ZIP_SIGNATURE):
             metadata = self._json(response, "PPTX 接口")

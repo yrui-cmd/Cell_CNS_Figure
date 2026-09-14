@@ -83,6 +83,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.authorized():
             return
+        if self.path == "/api/journal-figure-jobs/jfig_test_001/pptx":
+            Handler.pptx_count += 1
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            self.send_header("Content-Length", str(len(PPTX)))
+            self.end_headers()
+            return self.wfile.write(PPTX)
         if self.path == "/api/balance":
             return self.send_json({
                 "ok": True,
@@ -118,19 +125,6 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         self.send_json({"job_id": "jfig_test_001", "status": "cancelled"})
-
-    def do_PUT(self):
-        if not self.authorized():
-            return
-        if self.path != "/api/journal-figure-jobs/jfig_test_001/pptx":
-            return self.send_json({"error": "not found"}, 404)
-        Handler.pptx_count += 1
-        self.send_response(200)
-        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        self.send_header("Content-Length", str(len(PPTX)))
-        self.end_headers()
-        self.wfile.write(PPTX)
-
 
 def call(script: Path, env: dict[str, str], *args: str, expect: int = 0, stdin: str | None = None):
     result = subprocess.run(

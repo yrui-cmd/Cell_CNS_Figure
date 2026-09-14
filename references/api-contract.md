@@ -9,7 +9,7 @@
 - 提交：`POST /api/journal-figure-jobs`
 - 状态：`GET /api/journal-figure-jobs/{job_id}`
 - 结果：`GET /api/journal-figure-jobs/{job_id}/result`
-- 高级图可编辑文件：`PUT /api/journal-figure-jobs/{job_id}/pptx`
+- 高级图可编辑文件：`GET /api/journal-figure-jobs/{job_id}/pptx`
 - 取消：`DELETE /api/journal-figure-jobs/{job_id}`
 - 鉴权：`Authorization: Bearer <API_KEY>`
 
